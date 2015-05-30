@@ -2,6 +2,7 @@ var gl;
 var shader_program;
 
 // Fov is calculated from top edge to bottom edge
+var camera_rotating = false;
 var camera_fov_y_degrees = 45;
 var camera_pitch = 0;
 var camera_yaw = 0;
@@ -226,12 +227,19 @@ function show_photosphere(canvas_id, image_src)
 	// Listen mouse dragging
 	canvas.addEventListener('mousedown', function(event){
 		if (event.button == 0) {
+			camera_rotating = true;
 			mouse_last_pos_x = event.screenX;
 			mouse_last_pos_y = event.screenY;
 		}
 	});	
+	canvas.addEventListener('mouseup', function(event){
+		if (event.button == 0) {
+			camera_rotating = false;
+		}
+	});
 	canvas.addEventListener('mousemove', function(event){
-		if (event.buttons & 1) {
+		if ((event.buttons != undefined && event.buttons & 1) ||
+		    (event.buttons == undefined && camera_rotating)) {
 			var delta_x = event.screenX - mouse_last_pos_x;
 			var delta_y = event.screenY - mouse_last_pos_y;
 			mouse_last_pos_x = event.screenX;
