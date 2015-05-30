@@ -248,6 +248,17 @@ function show_photosphere(canvas_id, image_src)
 			}
 			draw_sphere();
 		}
+	});
+	// Listen mouse wheel
+	canvas.addEventListener('mousewheel', function(event){
+		camera_fov_y_degrees -= event.wheelDelta * 0.025;
+		if (camera_fov_y_degrees < 15) {
+			camera_fov_y_degrees = 15;
+		}
+		if (camera_fov_y_degrees > 90) {
+			camera_fov_y_degrees = 90;
+		}
+		draw_sphere();
 	});	
 
 	init_gl(canvas);
