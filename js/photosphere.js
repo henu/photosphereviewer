@@ -101,7 +101,7 @@ function init_shaders()
 	'	\n' +
 	'	// Calculate position in texture\n' +
 	'	vec2 tex_pos;\n' +
-	'	tex_pos.x = 0.5 + ray_yaw / PI / 2.0;\n' +
+	'	tex_pos.x = 0.5 - ray_yaw / PI / 2.0;\n' +
 	'	tex_pos.y = 0.5 + ray_pitch / PI;\n' +
 	'	\n' +
 	'	gl_FragColor = texture2D(tex, tex_pos);\n' +
