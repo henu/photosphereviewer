@@ -1,6 +1,13 @@
 var gl;
 var shader_program;
 
+// Fov is calculated from top edge to bottom edge
+var camera_fov_y_degrees = 45;
+var camera_pitch = 0;
+var camera_yaw = 0;
+var mouse_last_pos_x = 0;
+var mouse_last_pos_y = 0;
+
 function init_gl(canvas)
 {
 	try {
@@ -48,9 +55,6 @@ function init_shaders()
 	'uniform sampler2D tex;\n' +
 	'uniform float fov_x;\n' +
 	'uniform float fov_y;\n' +
-	'//uniform float width;\n' +
-	'//uniform float height;\n' +
-	'//uniform float aspect;\n' +
 	'uniform mat3 camera_rot;\n' +
 	'\n' +
 	'varying vec2 pos;\n' +
@@ -71,13 +75,21 @@ function init_shaders()
 	'	// Calculate pitch and yaw of ray\n' +
 	'	float ray_pitch = asin(ray_dir.z);\n' +
 	'	float ray_yaw;\n' +
+	'	float ray_dir_xy_len = sqrt(ray_dir.x*ray_dir.x + ray_dir.y*ray_dir.y);\n' +
+	'	vec2 ray_dir_xy;\n' +
+	'	if (ray_dir_xy_len > 0.0) {\n' +
+	'		ray_dir_xy.x = ray_dir.x / ray_dir_xy_len;\n' +
+	'		ray_dir_xy.y = ray_dir.y / ray_dir_xy_len;\n' +
+	'	} else {\n' +
+	'		ray_dir_xy = vec2(0.0, 0.0);\n' +
+	'	}\n' +
 	'	if (ray_dir.y > 0.0) {\n' +
-	'		ray_yaw = -asin(ray_dir.x);\n' +
+	'		ray_yaw = -asin(ray_dir_xy.x);\n' +
 	'	} else if (ray_dir.y < 0.0) {\n' +
 	'		if (ray_dir.x > 0.0) {\n' +
-	'			ray_yaw = -PI + asin(ray_dir.x);\n' +
+	'			ray_yaw = -PI + asin(ray_dir_xy.x);\n' +
 	'		} else {\n' +
-	'			ray_yaw = PI + asin(ray_dir.x);\n' +
+	'			ray_yaw = PI + asin(ray_dir_xy.x);\n' +
 	'		}\n' +
 	'	} else {\n' +
 	'		if (ray_dir.x > 0.0) {\n' +
@@ -89,7 +101,7 @@ function init_shaders()
 	'	\n' +
 	'	// Calculate position in texture\n' +
 	'	vec2 tex_pos;\n' +
-	'	tex_pos.x = (1.0 + ray_yaw / PI) / 2.0;\n' +
+	'	tex_pos.x = 0.5 + ray_yaw / PI / 2.0;\n' +
 	'	tex_pos.y = 0.5 + ray_pitch / PI;\n' +
 	'	\n' +
 	'	gl_FragColor = texture2D(tex, tex_pos);\n' +
@@ -115,11 +127,6 @@ function init_shaders()
 	shader_program.unif_tex = gl.getUniformLocation(shader_program, 'tex');
 	shader_program.unif_fov_x = gl.getUniformLocation(shader_program, 'fov_x');
 	shader_program.unif_fov_y = gl.getUniformLocation(shader_program, 'fov_y');
-/*
-	shader_program.unif_width = gl.getUniformLocation(shader_program, 'width');
-	shader_program.unif_height = gl.getUniformLocation(shader_program, 'height');
-	shader_program.unif_aspect = gl.getUniformLocation(shader_program, 'aspect')
-*/
 	shader_program.unif_camera_rot = gl.getUniformLocation(shader_program, 'camera_rot');
 
 	return shader_program;
@@ -151,11 +158,11 @@ function init_texture(image_src)
 		gl.bindTexture(gl.TEXTURE_2D, texture);
 		gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
 		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, texture.image);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
 		// Clamp horizontally, but not vertically
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT); 
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
 		gl.bindTexture(gl.TEXTURE_2D, null);
 		texture.loaded = true;
@@ -175,27 +182,29 @@ function draw_sphere()
 		gl.uniform1i(shader_program.unif_tex, 0);
 	}
 
-	// Fov is calculated from top edge to bottom edge
-	var fov_y_degrees = 75;
+	var camera_yaw_mat_raw = [
+		 Math.cos(camera_yaw), Math.sin(camera_yaw), 0,
+		-Math.sin(camera_yaw), Math.cos(camera_yaw), 0,
+		 0,                    0,                    1
+	]
 
-	var camera_rot = new Float32Array([
-		1, 0, 0,
-		0, 1, 0,
-		0, 0, 1
-	]);
+	var camera_pitch_mat_raw = [
+		1,  0,                      0,
+		0,  Math.cos(camera_pitch), Math.sin(camera_pitch),
+		0, -Math.sin(camera_pitch), Math.cos(camera_pitch)
+	]
+
+	var camera_mat_raw = multiply_matrices(camera_pitch_mat_raw, camera_yaw_mat_raw);
+
+	var camera_rot = new Float32Array(camera_mat_raw);
 
 	var aspect = gl.viewport_width / gl.viewport_height;
 
-	var fov_y = fov_y_degrees / 180 * Math.PI;
+	var fov_y = camera_fov_y_degrees / 180 * Math.PI;
 	var fov_x = 2 * Math.atan(aspect * Math.tan(fov_y / 2))
 
 	gl.uniform1f(shader_program.unif_fov_x, fov_x);
 	gl.uniform1f(shader_program.unif_fov_y, fov_y);
-/*
-	gl.uniform1f(shader_program.unif_width, gl.viewport_width);
-	gl.uniform1f(shader_program.unif_height, gl.viewport_height);
-	gl.uniform1f(shader_program.unif_aspect, aspect);
-*/
 	gl.uniformMatrix3fv(shader_program.unif_camera_rot, false, camera_rot);
 
 	gl.bindBuffer(gl.ARRAY_BUFFER, vrt_pos_buf);
@@ -214,6 +223,33 @@ function show_photosphere(canvas_id, image_src)
 	canvas.width = canvas.offsetWidth;
 	canvas.height = canvas.offsetHeight;
 
+	// Listen mouse dragging
+	canvas.addEventListener('mousedown', function(event){
+		if (event.button == 0) {
+			mouse_last_pos_x = event.screenX;
+			mouse_last_pos_y = event.screenY;
+		}
+	});	
+	canvas.addEventListener('mousemove', function(event){
+		if (event.buttons & 1) {
+			var delta_x = event.screenX - mouse_last_pos_x;
+			var delta_y = event.screenY - mouse_last_pos_y;
+			mouse_last_pos_x = event.screenX;
+			mouse_last_pos_y = event.screenY;
+
+			var rot_speed = camera_fov_y_degrees / 35000;
+
+			camera_yaw += delta_x * rot_speed;
+			camera_pitch += delta_y * rot_speed;
+			if (camera_pitch > Math.PI / 2) {
+				camera_pitch = Math.PI / 2;
+			} else if (camera_pitch < -Math.PI / 2) {
+				camera_pitch = -Math.PI / 2;
+			}
+			draw_sphere();
+		}
+	});	
+
 	init_gl(canvas);
 	shader_program = init_shaders();
 	init_buffers();
@@ -222,4 +258,13 @@ function show_photosphere(canvas_id, image_src)
 	gl.clearColor(0.0, 0.0, 0.0, 1.0);
 
 	draw_sphere();
+}
+
+function multiply_matrices(a, b)
+{
+	return [
+		a[0]*b[0] + a[1]*b[3] + a[2]*b[6], a[0]*b[1] + a[1]*b[4] + a[2]*b[7], a[0]*b[2] + a[1]*b[5] + a[2]*b[8],
+		a[3]*b[0] + a[4]*b[3] + a[5]*b[6], a[3]*b[1] + a[4]*b[4] + a[5]*b[7], a[3]*b[2] + a[4]*b[5] + a[5]*b[8],
+		a[6]*b[0] + a[7]*b[3] + a[8]*b[6], a[6]*b[1] + a[7]*b[4] + a[8]*b[7], a[6]*b[2] + a[7]*b[5] + a[8]*b[8]
+	];
 }
