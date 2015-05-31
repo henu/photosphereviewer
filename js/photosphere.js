@@ -1,4 +1,4 @@
-var Photosphere = function(canvas_id, image_src)
+var Photosphere = function(canvas_id, image_src, image_low_src)
 {
 	// Fov is calculated from top edge to bottom edge
 	this.camera_rotating = false;
@@ -39,7 +39,7 @@ var Photosphere = function(canvas_id, image_src)
 	this.init_gl();
 	this.init_shaders();
 	this.init_buffers();
-	this.init_texture(image_src);
+	this.init_texture(image_src, image_low_src);
 
 	this.gl.clearColor(0.0, 0.0, 0.0, 1.0);
 
@@ -188,22 +188,34 @@ Photosphere.prototype.init_buffers = function()
 	this.vrt_pos_buf.num_items = 4;
 }
 
-Photosphere.prototype.init_texture = function(image_src)
+Photosphere.prototype.init_texture = function(image_src, image_low_src)
 {
+	if (image_low_src) {
+		this.texture_low = this.gl.createTexture();
+		this.texture_low.image = new Image();
+		var photosphere = this;
+		var texture_low = this.texture_low;
+		this.texture_low.image.onload = function() {
+			photosphere.image_loaded(texture_low);
+		}
+		this.texture_low.image.src = image_low_src;
+	}
+
 	this.texture = this.gl.createTexture();
 	this.texture.image = new Image();
 	var photosphere = this;
+	var texture = this.texture;
 	this.texture.image.onload = function() {
-		photosphere.image_loaded();
+		photosphere.image_loaded(texture);
 	}
 	this.texture.image.src = image_src;
 }
 
-Photosphere.prototype.image_loaded = function()
+Photosphere.prototype.image_loaded = function(texture)
 {
-	this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture);
+	this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
 	this.gl.pixelStorei(this.gl.UNPACK_FLIP_Y_WEBGL, true);
-	this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.gl.RGBA, this.gl.UNSIGNED_BYTE, this.texture.image);
+	this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.gl.RGBA, this.gl.UNSIGNED_BYTE, texture.image);
 	this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR);
 	this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.NEAREST);
 	// Clamp horizontally, but not vertically
@@ -211,7 +223,7 @@ Photosphere.prototype.image_loaded = function()
 	this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
 
 	this.gl.bindTexture(this.gl.TEXTURE_2D, null);
-	this.texture.loaded = true;
+	texture.loaded = true;
 	this.draw_sphere();
 }
 
@@ -222,6 +234,10 @@ Photosphere.prototype.draw_sphere = function()
 	if (this.texture.loaded) {
 		this.gl.activeTexture(this.gl.TEXTURE0);
 		this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture);
+		this.gl.uniform1i(this.shader_program.unif_tex, 0);
+	} else if (this.texture_low.loaded) {
+		this.gl.activeTexture(this.gl.TEXTURE0);
+		this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture_low);
 		this.gl.uniform1i(this.shader_program.unif_tex, 0);
 	}
 
