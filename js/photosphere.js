@@ -2,7 +2,7 @@ var Photosphere = function(canvas_id, image_src)
 {
 	// Fov is calculated from top edge to bottom edge
 	this.camera_rotating = false;
-	this.camera_fov_y_degrees = 45;
+	this.camera_fov_y_degrees = 60;
 	this.camera_pitch = 0;
 	this.camera_yaw = 0;
 	this.mouse_last_pos_x = 0;
@@ -121,7 +121,12 @@ Photosphere.prototype.init_shaders = function()
 	'	} else {\n' +
 	'		ray_dir_xy = vec2(0.0, 0.0);\n' +
 	'	}\n' +
-	'	if (ray_dir.y > 0.0) {\n' +
+	'// TODO: Yaw calculation here still has tiny errors, when ray points left or right!\n' +
+	'	if (ray_dir_xy.x <= -1.0) {\n' +
+	'		ray_yaw = PI / 2.0;\n' +
+	'	} else if (ray_dir_xy.x >= 1.0) {\n' +
+	'		ray_yaw = -PI / 2.0;\n' +
+	'	} else if (ray_dir.y > 0.0) {\n' +
 	'		ray_yaw = -asin(ray_dir_xy.x);\n' +
 	'	} else if (ray_dir.y < 0.0) {\n' +
 	'		if (ray_dir.x > 0.0) {\n' +
