@@ -5,4 +5,4 @@ requirement is HTML5 browser. No external libraries are needed.
 
 # Examples
 
-You can find examples from here: http://storage2.henu.fi/random/photospheres/
+You can find examples from here: http://storage1.henu.fi/random/photospheres/
